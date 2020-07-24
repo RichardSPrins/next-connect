@@ -26,7 +26,8 @@ const handle = app.getRequestHandler();
 const mongooseOptions = {
   useNewUrlParser: true,
   useCreateIndex: true,
-  useFindAndModify: false
+  useFindAndModify: false,
+  useUnifiedTopology: true
 };
 
 mongoose
@@ -125,8 +126,8 @@ app.prepare().then(() => {
   });
 
   /* default route
-     - allows Next to handle all other routes
-     - includes the numerous `/_next/...` routes which must    be exposedfor the next app to work correctly
+      - allows Next to handle all other routes
+      - includes the numerous `/_next/...` routes which must be exposed for the next app to work correctly
      - includes 404'ing on unknown routes */
   server.get("*", (req, res) => {
     handle(req, res);
