@@ -28,13 +28,18 @@ exports.getUserById = async (req, res, next, id) => {
   next()
 };
 
-exports.getUserProfile = (req, res) => {
-  if(!req.profile){
-    return res.status(404).json({
-      message: "No user found."
-    })
+exports.getUserProfile = async (req, res) => {
+  try {
+    let userProfile = await req.profile
+    if(!userProfile){
+      return res.status(404).json({
+        message: "No user found."
+      })
+    }
+    return res.json(userProfile)
+  } catch (error) {
+    return res.json(error)
   }
-  return res.json(req.profile)
 };
 
 exports.getUserFeed = () => {};
