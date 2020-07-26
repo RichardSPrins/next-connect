@@ -8,6 +8,13 @@ const expressValidator = require("express-validator");
 const passport = require("passport");
 const helmet = require("helmet");
 const compression = require("compression");
+const AdminBro = require('admin-bro')
+const AdminBroExpressjs = require('admin-bro-expressjs')
+const User = require('./models/User')
+const formidableMiddleware = require('express-formidable')
+
+AdminBro.registerAdapter(require('admin-bro-mongoose'))
+
 
 /* Loads all variables from .env file to "process.env" */
 require("dotenv").config();
@@ -50,6 +57,7 @@ app.prepare().then(() => {
     /* Compression gives us gzip compression */
     server.use(compression());
   }
+  // server.use(formidableMiddleware());
 
   /* Body Parser built-in to Express as of version 4.16 */
   server.use(express.json());
@@ -109,30 +117,40 @@ app.prepare().then(() => {
       skip: req => req.url.includes("_next")
     })
   );
-
+  
+  const adminBro = new AdminBro({
+    resources: [User],
+    rootPath: '/admin',
+  })
+  
+  // Build and use a router which will handle all AdminBro routes
+  const adminRouter = AdminBroExpressjs.buildRouter(adminBro)
+  server.use(adminBro.options.rootPath, adminRouter)
+  
   /* apply routes from the "routes" folder */
   server.use("/", routes);
-
+  // Pass all configuration settings to AdminBro
+  
   /* Error handling from async / await functions */
   server.use((err, req, res, next) => {
     const { status = 500, message } = err;
     res.status(status).json(message);
   });
-
+  
   /* create custom routes with route params */
   server.get("/profile/:userId", (req, res) => {
     const routeParams = Object.assign({}, req.params, req.query);
     return app.render(req, res, "/profile", routeParams);
   });
-
+  
   /* default route
-      - allows Next to handle all other routes
-      - includes the numerous `/_next/...` routes which must be exposed for the next app to work correctly
-     - includes 404'ing on unknown routes */
+  - allows Next to handle all other routes
+  - includes the numerous `/_next/...` routes which must be exposed for the next app to work correctly
+  - includes 404'ing on unknown routes */
   server.get("*", (req, res) => {
     handle(req, res);
   });
-
+  
   server.listen(port, err => {
     if (err) throw err;
     console.log(`Server listening on ${ROOT_URL}`);

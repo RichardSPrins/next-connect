@@ -1,8 +1,10 @@
 const User = require('../models/User')
 const mongoose = require('mongoose')
+const multer = require('multer')
+const jimp = require('jimp')
 
 exports.getUsers = async (req, res) => {
-  const users = await User.find().select('_id name email createdAt updatedAt')
+  const users = await User.find().select('_id name email  followers following createdAt updatedAt')
   res.json(users)
 };
 
@@ -28,6 +30,7 @@ exports.getUserById = async (req, res, next, id) => {
   next()
 };
 
+
 exports.getUserProfile = async (req, res) => {
   try {
     let userProfile = await req.profile
@@ -42,13 +45,48 @@ exports.getUserProfile = async (req, res) => {
   }
 };
 
-exports.getUserFeed = () => {};
+exports.getUserFeed = async (req, res) => {
+  const { following, _id } = req.profile;
 
-exports.uploadAvatar = () => {};
+  following.push(_id)
+  const users = await User.find({ _id: { $nin: following }}).select('_id name avatar')
+  res.json(users)
+};
 
-exports.resizeAvatar = () => {};
+const avatarUploadOptions = {
+  storage: multer.memoryStorage(),
+  limits: {
+    // \storing img files up to 1mb
+    fileSize: 1024 * 1024 * 1
+  },
+  fileFilter: (req, file, next) => {
+    if(file.mimetype.startsWith('image/')){
+      next(null, true)
+    } else {
+      next(null, false)
+    }
+  }
+}
 
-exports.updateUser = () => {};
+exports.uploadAvatar = multer(avatarUploadOptions).single('avatar');
+
+exports.resizeAvatar = async (req, res, next) => {
+  if(!req.file){
+    return next()
+  }
+  const extension = req.file.mimetype.split('/')[1]
+  req.body.avatar = `/static/uploads/avatars/${req.user.name}-${Date.now()}.${extension}`;
+  const image = await jimp.read(req.file.buffer)
+  await image.resize(250, jimp.AUTO);
+  await image.write(`./${req.body.avatar}`)
+  next()
+};
+
+exports.updateUser = async (req, res) => {
+  req.body.updatedAt = new Date().toISOString()
+  const updatedUser = await User.findOneAndUpdate({ _id: req.user.id }, { $set: req.body }, { new: true, runValidators: true })
+  res.json(updatedUser)
+};
 
 exports.deleteUser = async (req, res) => {
   const { userId } = req.params;
@@ -60,10 +98,39 @@ exports.deleteUser = async (req, res) => {
   res.json(deletedUser)
 };
 
-exports.addFollowing = () => {};
+exports.addFollowing = async (req, res, next) => {
+  const { followId } = req.body;
+  const followed = await User.findOne({ following: followId })
+  if(followed){
+    res.status(500).json({ message: "already following this user"})
+    return next()
+  }
 
-exports.addFollower = () => {};
+  await User.findOneAndUpdate({ _id: req.user._id }, { $push: { following: followId}})
+  next()
+};
 
-exports.deleteFollowing = () => {};
+exports.addFollower = async (req, res) => {
+  const { followId } = req.body;
+  const followed = await User.findOne({ followers: req.user._id })
+  if(followed){
+    res.status(500).json({ message: "already followed by this user"})
+    return next()
+  }
+  const user = await User.findOneAndUpdate({ _id: followId }, { $push: { followers: req.user._id}}, { new: true })
+  res.json(user)
+};
 
-exports.deleteFollower = () => {};
+exports.deleteFollowing = async (req, res, next) => {
+  const { followId } = req.body;
+
+  await User.findOneAndUpdate({ _id: req.user._id }, { $pull: { following: followId}})
+  next()
+};
+
+exports.deleteFollower = async (req, res) => {
+  const { followId } = req.body;
+
+  const user = await User.findOneAndUpdate({ _id: followId }, { $pull: { followers: req.user._id}}, { new: true })
+  res.json(user)
+};
